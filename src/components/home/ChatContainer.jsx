@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useChatStore } from '../../store/useChatStore'
 import ChatHeader from '../home/ChatHeader'
 import MessageInput from '../home/MessageInput'
@@ -7,20 +7,25 @@ import { useAuthStore } from '../../store/useAuthStore'
 import { formatMessageTime } from '../../lib/utils'
 
 const ChatContainer = () => {
-  const { messages, getMessages, isMessagesLoading, selectedUser } = useChatStore()
+  const { messages, getMessages, isMessagesLoading, selectedUser, listenForNewMessages, stopListeningForMessages } = useChatStore()
   const { authUser } = useAuthStore()
+  const latestMessageRef = useRef()
 
   useEffect(() =>{
     getMessages(selectedUser._id)
-  }, [selectedUser._id, getMessages])
 
-  if (isMessagesLoading) return (
-    <div className='flex flex-col flex-1 overflow-auto'>
-      <ChatHeader />
-      <MessageSkeleton />
-      <MessageInput />
-    </div>
-  )
+    listenForNewMessages()
+
+    // stopListeningForMessages() is not called immediately
+    // React runs this cleanup function when the component unmounts 
+    //   or when selectedUser._id changes to prevent memory leaks 
+    //   and avoid multiple event listeners
+    return () => stopListeningForMessages() // cleanup function
+  }, [selectedUser._id, getMessages, listenForNewMessages, stopListeningForMessages])
+
+  useEffect(() => {
+    latestMessageRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
 
   return (
     <div className='flex flex-col flex-1 overflow-auto'>
@@ -29,7 +34,11 @@ const ChatContainer = () => {
       {isMessagesLoading ? <MessageSkeleton /> : (
         <div className='flex flex-col flex-1 overflow-auto'>
           {messages.map((message) => (
-            <div key={message._id} className={`chat ${message.senderId === authUser._id ? 'chat-end' : 'chat-start'}`}>
+            <div
+              key={message._id}
+              ref={latestMessageRef}
+              className={`chat ${message.senderId === authUser._id ? 'chat-end' : 'chat-start'}`}
+            >
               <div className='chat-image avatar'>
                 <div className='border rounded-full size-10'>
                   <img src={message.senderId === authUser._id ? (authUser.avatar || 'default-avatar.png') : (selectedUser.avatar || 'default-avatar.png')} alt='avatar' />
